@@ -1,0 +1,727 @@
+<!--suppress CssUnusedSymbol, JSUnusedGlobalSymbols -->
+<head>
+    <title>Neet</title>
+</head>
+<body>
+<div class="frame"></div>
+<div class="frame-title">Neet</div>
+<div class="frame-close">x</div>
+<div class="frame-minimize">-</div>
+<div class="navbar">
+    <div class="title">Neet</div>
+    <div class="buttons">
+        <div class="button button-enabled" data-btn="1">My Scripts</div>
+        <div class="button" style="display: none" data-btn="2">Script</div>
+        <div class="button" data-btn="3">Create Script</div>
+        <div class="button" data-btn="4">Terminal</div>
+        <div class="button" data-btn="5">Documentation</div>
+    </div>
+</div>
+<div class="container">
+    <div class="page-scripts" style="display: none"></div>
+    <div class="page-edit" style="display: none">
+        <input type="text" class="name-input"><br><br>
+        <textarea class="code" spellcheck="false"></textarea>
+    </div>
+    <div class="page-create" style="display: none">sa</div>
+    <div class="page-terminal" style="display: none">
+        <div class="messages">
+            <div class="line">
+                <div class="cursor"></div>
+            </div>
+        </div>
+    </div>
+    <div class="page-docs" style="display: none">as</div>
+</div>
+<div class="popup" style="pointer-events: none">
+    <div class="popup-container">
+        <div class="popup-close">
+            <svg width="40" height="24">
+                <path d="M15 7 L25 17 Z" stroke="white"></path>
+                <path d="M25 7 L15 17 Z" stroke="white"></path>
+            </svg>
+        </div>
+        <div class="popup-content"></div>
+        <div class="popup-buttons"></div>
+    </div>
+</div>
+</body>
+<style>
+    * {
+        user-select: none;
+        color: white;
+        font-family: Calibri, serif;
+    }
+
+    body {
+        margin: 0;
+        background: #36393F;
+        overflow: hidden;
+    }
+
+    .popup {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        text-align: center;
+        opacity: 0;
+        transition: opacity 1s;
+    }
+
+    .popup-container {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 50%;
+        height: 50%;
+        translate: -50% -50%;
+        background: #3c4046;
+        padding: 10px;
+        border-radius: 5px;
+        transition: transform 1s;
+        transform: translateY(-100%);
+    }
+
+    .popup-close {
+        position: absolute;
+        right: 0;
+        top: 0;
+        background: red;
+        border-top-right-radius: 5px;
+        cursor: pointer;
+    }
+
+    .popup-close:hover {
+        background: #ff4646;
+    }
+
+    .popup-buttons {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        translate: -50%;
+        display: flex;
+    }
+
+    .popup-button {
+        padding: 10px;
+        margin: 5px;
+        background: #4e5259;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: scale .2s;
+    }
+
+    .popup-button:hover {
+        scale: 1.1;
+    }
+
+    .frame {
+        position: absolute;
+        -webkit-app-region: drag;
+        width: calc(100% - 64px);
+        height: 20px;
+        background: #3c4046;
+    }
+
+    .frame-title {
+        position: absolute;
+        color: #c0c0c0;
+        left: 10px;
+    }
+
+    .frame-close {
+        position: absolute;
+        right: 0;
+        width: 32px;
+        height: 20px;
+        text-align: center;
+        background: #3c4046;
+        cursor: pointer;
+    }
+
+    .frame-close:hover {
+        background: red;
+    }
+
+    .frame-minimize {
+        position: absolute;
+        right: 32px;
+        width: 32px;
+        height: 20px;
+        text-align: center;
+        cursor: pointer;
+        background: #3c4046;
+    }
+
+    .frame-minimize:hover {
+        background: #3c8eff;
+    }
+
+    .navbar {
+        position: absolute;
+        top: 20px;
+        width: 100%;
+        height: 49px;
+        display: flex;
+        border-bottom: 3px solid #3c4046;
+    }
+
+    .navbar > .title {
+        margin-left: 30px;
+        margin-top: 5px;
+        font-size: 30px;
+    }
+
+    .buttons {
+        position: absolute;
+        right: 0;
+        display: flex;
+    }
+
+    .button {
+        padding: 15px 30px;
+        border-left: 3px solid #3c4046;
+        cursor: pointer;
+        transition: background-color .3s;
+    }
+
+    .button:hover {
+        background: #3c4046;
+    }
+
+    .button-enabled {
+        background-color: #4e5259 !important;
+        border-left: 3px solid #4e5259;
+    }
+
+    .container {
+        translate: 0 69px;
+        height: 100%;
+    }
+
+    .page-scripts {
+        height: calc(100% - 69px);
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .script {
+        border-bottom: 2px solid #3c4046;
+        padding: 15px;
+        transition: scale .3s, background-color .3s;
+    }
+
+    .script:hover {
+        background: #393c42;
+    }
+
+    .right {
+        margin-top: -19px;
+        display: flex;
+        width: max-content;
+        translate: 1000%;
+    }
+
+    .last-edit {
+        text-align: right;
+        color: #bdbdbd;
+        margin-right: 10px;
+    }
+
+    .settings {
+        cursor: pointer;
+        translate: 0 2px;
+    }
+
+    .settings > img {
+        border-radius: 50%;
+        transition: rotate 1s, scale .5s;
+    }
+
+    .run {
+        cursor: pointer;
+        translate: 0 2px;
+        margin-right: 4px;
+    }
+
+    .run > img {
+        transition: scale .5s, filter .5s;
+    }
+
+    .stop {
+        cursor: pointer;
+        translate: 0 2px;
+        margin-right: 4px;
+    }
+
+    .stop > img {
+        transition: scale .5s, filter .5s;
+    }
+
+    .edit {
+        translate: 1px 2px;
+        cursor: pointer;
+    }
+
+    .edit > .edit-pen {
+        margin-right: -17px;
+    }
+
+    .delete {
+        cursor: pointer;
+        text-align: right;
+        translate: 1px;
+    }
+
+    .delete > .delete-bottom {
+        margin-top: 3px;
+        translate: -7px 2px;
+    }
+
+    .delete > .delete-top {
+        translate: 8.2px -13px;
+        transition: rotate .5s, translate .5s;
+    }
+
+    .messages {
+        position: absolute;
+        top: 0;
+        width: 100%;
+        height: calc(100% - 69px);
+        background-color: black;
+        user-select: text;
+        word-wrap: anywhere;
+        overflow-y: auto;
+    }
+
+    .line {
+        display: flex;
+        flex-wrap: wrap;
+        min-height: 18.4px;
+    }
+
+    .message {
+        font-family: monospace, serif;
+        height: max-content;
+    }
+
+    .cursor {
+        width: 5px;
+        height: 16px;
+    }
+
+    input, textarea {
+        outline: none;
+        border: none;
+        background: #3c4046;
+        padding: 10px;
+        resize: none;
+        border-radius: 10px;
+    }
+
+    .name-input {
+        margin: 15px;
+        width: calc(100% - 30px);
+    }
+
+    .code {
+        border-radius: 0;
+        width: 100%;
+        height: calc(100% - 155px);
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #888;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    @keyframes pen-rotate {
+        0% {
+            rotate: 0;
+        }
+
+        50% {
+            rotate: 15deg;
+        }
+
+        100% {
+            rotate: 0;
+        }
+    }
+</style>
+<script>addEventListener("keydown", e => e.key === "F5" && location.reload())</script>
+<script type="module">
+    document.querySelector(".frame-close").addEventListener("click", () => close())
+    document.querySelector(".frame-minimize").addEventListener("click", () => neet.minimize());
+    document.querySelectorAll(".button").forEach(i => {
+        const id = i.getAttribute("data-btn") * 1;
+        if (!id) return;
+        i.addEventListener("click", () => setPage(id));
+    });
+    let _page = -1;
+    const setPage = id => {
+        if (id === 3) {
+            document.querySelector(".popup-content").innerHTML = `<h1>Create Script</h1><br><br><input style="background: #4e5259">`;
+            document.querySelector(".popup-buttons").innerHTML = `<div class="popup-button" style="background: #00a900">Create</div><div class="popup-button" style="background: #be0000">Cancel</div>`;
+            showPopup();
+            document.querySelectorAll(".popup-buttons").forEach((i, j) => {
+                i.addEventListener("click", async () => {
+                    hidePopup();
+                    if (j === 0) {
+                        const name = document.querySelector(".popup-content > input").value;
+                        if (name.length < 1) return alert("Script names should have at least a character!");
+                        if (!/[a-zA-Z]/.test(name[0])) return alert("Script names should start with a letter!");
+                        if (!/^[a-zA-Z][a-zA-Z\d]*$/.test(name)) return alert("Script names should only include letters and numbers!");
+                        if (cache.scripts[name]) return alert("This script already exists!");
+                        cache.scripts[name] = {
+                            editedAt: Date.now(),
+                            code: ""
+                        };
+                        await neet.setCache(cache);
+                        await refreshScripts();
+                    }
+                });
+            });
+            return;
+        }
+        if (_page !== id && id === 1) refreshScripts();
+        _page = id;
+        if (_page !== 2) {
+            editingScriptName = null;
+            lastCode = null;
+        }
+        document.querySelectorAll(".button").forEach(i => {
+            if (i.getAttribute("data-btn") * 1 === id) i.classList.add("button-enabled");
+            else i.classList.remove("button-enabled");
+        });
+        document.querySelector(`[data-btn="2"]`).style.display = id === 2 ? "" : "none";
+        ["scripts", "edit", "create", "terminal", "docs"].forEach((i, j) => {
+            document.querySelector(".container > .page-" + i).style.display = j + 1 === id ? "" : "none";
+        });
+    };
+    let editingScriptName = null;
+    let lastCode = null;
+    let cache = await neet.getCache();
+    const refreshScripts = async () => {
+        cache = await neet.getCache();
+        const scriptsDiv = document.querySelector(".page-scripts");
+        scriptsDiv.innerHTML = "";
+        Object.keys(cache.scripts).forEach(name => {
+            const scr = cache.scripts[name];
+            const div = document.createElement("div");
+            div.classList.add("script");
+            div.setAttribute("data-script-name", name);
+            div.innerHTML = `
+<div class="name"> ${name}</div>
+<div class="right">
+    <div class="last-edit">Edited at ${new Date(scr["editedAt"]).toUTCString()}</div>
+    <div class="edit"><img src="edit-pen.png" class="edit-pen"><img src="edit-frame.png" class="edit-frame"></div>
+    <div class="delete"><img src="delete-top.png" class="delete-top"><img src="delete-bottom.png" class="delete-bottom"></div>
+    <div class="run"><img src="run.png"></div>
+    <div class="stop"><img src="stop.png"></div>
+    <div class="settings"><img src="settings.png"></div>
+</div>`;
+            ["edit", "delete", "settings", "run", "stop"].forEach(i => {
+                const d = div.querySelector(".right > ." + i);
+                const props = {
+                    edit: [
+                        ["animationDuration", ".3s"],
+                        ["animationTimingFunction", "linear"],
+                        ["animationName", "pen-rotate"],
+                        ["animationIterationCount", "infinite"]
+                    ],
+                    delete: [
+                        ["rotate", "-30deg"],
+                        ["translate", "4px -16px"]
+                    ],
+                    settings: [
+                        ["rotate", "180deg"],
+                        ["scale", "1.1"]
+                    ],
+                    run: [
+                        ["scale", "1.1"]
+                    ],
+                    stop: [
+                        ["scale", "1.1"]
+                    ]
+                }[i];
+                const propDiv = d.querySelector({
+                    edit: ".edit-pen",
+                    delete: ".delete-top",
+                    settings: "img",
+                    run: "img",
+                    stop: "img"
+                }[i]);
+                const images = d.querySelectorAll("img");
+                d.addEventListener("mouseenter", () => {
+                    props.forEach(i => propDiv.style[i[0]] = i[1]);
+                    images.forEach(i => i.src = i.src.replace("-on", "").replace(".", "-on."));
+                });
+                d.addEventListener("mouseleave", () => {
+                    props.forEach(i => propDiv.style[i[0]] = "");
+                    images.forEach(i => i.src = i.src.replace("-on", ""));
+                });
+                d.addEventListener("click", async () => {
+                    switch (i) {
+                        case "edit":
+                            document.querySelector(".name-input").value = name;
+                            lastCode = cache.scripts[name].code;
+                            document.querySelector(".code").value = lastCode;
+                            editingScriptName = name;
+                            setPage(2);
+                            break;
+                        case "delete":
+                            document.querySelector(".popup-content").innerHTML = `<h3>Are you sure you want to delete this script?</h3>`;
+                            document.querySelector(".popup-buttons").innerHTML = `<div class="popup-button" style="background: #00a900">Yes</div><div class="popup-button" style="background: #be0000">No</div>`;
+                            showPopup();
+                            document.querySelectorAll(".popup-buttons").forEach((i, j) => {
+                                i.addEventListener("click", async () => {
+                                    hidePopup();
+                                    if (j === 0) {
+                                        delete cache.scripts[name];
+                                        await neet.setCache(cache);
+                                        await refreshScripts();
+                                    }
+                                });
+                            });
+                            break;
+                        case "settings":
+                            break;
+                        case "run":
+                            if (isPrompting) return;
+                            clearLine();
+                            type("run " + name);
+                            enter();
+                            break;
+                        case "stop":
+                            await neet.stopProcess(name);
+                            break;
+                    }
+                });
+            });
+            scriptsDiv.appendChild(div);
+            const right = div.querySelector(".right");
+            const res = () => right.style.translate = (innerWidth - right.getBoundingClientRect().width - 30) + "px";
+            setTimeout(res, 100);
+            addEventListener("resize", res);
+        });
+        updateScriptIcons();
+    };
+    setPage(1);
+    const saveScript = async () => {
+        if (_page !== 2 || (
+            lastCode === document.querySelector(".code").value &&
+            editingScriptName === document.querySelector(".name-input").value
+        )) return false;
+        if (editingScriptName !== document.querySelector(".name-input").value) {
+            const newName = document.querySelector(".name-input").value;
+            cache.scripts[newName] = cache.scripts[editingScriptName];
+            delete cache.scripts[editingScriptName];
+            editingScriptName = newName;
+        }
+        cache.scripts[editingScriptName].code = lastCode = document.querySelector(".code").value;
+        cache.scripts[editingScriptName].editedAt = Date.now();
+        await neet.setCache(cache);
+        return true;
+    };
+    const cursorD = document.querySelector(".cursor");
+    const messagesD = document.querySelector(".messages");
+    let cursorIndex = 0;
+    let prm = "";
+    const history = [""];
+    let currentHistory = 0;
+    /**
+     * @param {string} str
+     * @param {string} color
+     */
+    const type = (str, color = "white") => {
+        str.split("").forEach(i => {
+            const d = document.createElement("div");
+            d.classList.add("message");
+            d.style.color = color;
+            if (i === " ") d.innerHTML = "&nbsp;";
+            else d.innerText = i;
+            cursorD.insertAdjacentElement("beforebegin", d);
+            cursorIndex++;
+            prm += i;
+        });
+        messagesD.scrollTop = messagesD.scrollHeight;
+    };
+    const updateCursor = () => {
+        const lineD = cursorD.parentElement;
+        const children = Array.from(lineD.children).filter(i => i !== cursorD).slice(2);
+        if (cursorIndex < 0) cursorIndex = 0;
+        if (cursorIndex > prm.length) cursorIndex = prm.length;
+        const i = children[cursorIndex];
+        if (!i) return lineD.insertAdjacentElement("beforeend", cursorD);
+        i.insertAdjacentElement("beforebegin", cursorD);
+    };
+    const backspace = () => {
+        const lineD = cursorD.parentElement;
+        const children = Array.from(lineD.children).filter(i => i !== cursorD).slice(2);
+        if (cursorIndex < 0) cursorIndex = 0;
+        if (cursorIndex > prm.length) cursorIndex = prm.length;
+        const i = children[cursorIndex - 1];
+        if (!i) return;
+        i.remove();
+        prm = prm.substring(0, cursorIndex - 1) + prm.substring(cursorIndex);
+        cursorIndex--;
+        updateCursor();
+    };
+    let runningScripts = [];
+    const updateScriptIcons = () => {
+        document.querySelectorAll(".script").forEach(i => {
+            const name = i.getAttribute("data-script-name");
+            const run = i.querySelector(".run");
+            const stop = i.querySelector(".stop");
+            if (runningScripts.length) {
+                if (runningScripts.includes(name)) {
+                    run.style.display = "none";
+                    stop.style.display = "";
+                } else {
+                    run.style.display = "none";
+                    stop.style.display = "none";
+                }
+            } else {
+                run.style.display = "";
+                stop.style.display = "none";
+            }
+        });
+    }
+    const onPromptingChange = to => {
+    };
+    const onProcessesChange = () => {
+        console.log(runningScripts)
+        updateScriptIcons();
+    };
+    let isPrompting = false;
+    let sP = null;
+    const enter = (send = true) => {
+        let d = document.createElement("div");
+        d.classList.add("line");
+        d.appendChild(cursorD);
+        messagesD.appendChild(d);
+        cursorOn = false;
+        if (send) {
+            if (prm) {
+                history[history.length - 1] = prm;
+                currentHistory = history.length;
+            }
+            sP = !!prm;
+            onPromptingChange(true);
+            isPrompting = true;
+            neet.sendPrompt(prm);
+        }
+        prm = "";
+    };
+    const clear = () => {
+        Array.from(messagesD.children).filter(i => i !== cursorD.parentElement).forEach(i => i.remove());
+    };
+    const clearLine = () => {
+        Array.from(cursorD.parentElement.children).forEach(i => i !== cursorD && i.remove());
+        type("$ ", "#00ff00");
+        prm = "";
+    };
+    const historyMove = a => {
+        currentHistory += a;
+        if (currentHistory >= history.length || currentHistory < 0) return currentHistory -= a;
+        clearLine();
+        type(history[currentHistory]);
+    };
+    clearLine();
+
+    let cursorOn = true;
+    setInterval(() => {
+        cursorD.style.background = (Date.now() % 1000 < 500 || lastType + 500 > Date.now()) && cursorOn ? "white" : "";
+    });
+    const messageLoop = async () => {
+        const messages = await neet.getMessages();
+        messages.forEach(m => {
+            if (!m) return;
+            if (typeof m === "string") {
+                m.split("\n").forEach(i => {
+                    if (!i) return;
+                    type(i);
+                    const d = document.createElement("div");
+                    d.classList.add("line");
+                    d.appendChild(cursorD);
+                    messagesD.appendChild(d);
+                });
+                return;
+            }
+            if (m.event === "clear") clear();
+            else if (m.event === "end") {
+                clearLine();
+                //if (sP) history.push("");
+                cursorOn = true;
+                onPromptingChange(false);
+                isPrompting = false;
+            } else if (m.event === "scripts") {
+                runningScripts = m.scripts;
+                onProcessesChange();
+            }
+        });
+        setTimeout(messageLoop);
+    };
+    messageLoop();
+    let lastType = 0;
+    setInterval(() => {
+        if (_page !== 2) return;
+        const hasChanged = lastCode !== document.querySelector(".code").value ||
+            editingScriptName !== document.querySelector(".name-input").value;
+        document.querySelector("[data-btn='2']").innerHTML = "Script" + (hasChanged ? "*" : "");
+    });
+    addEventListener("keydown", async e => {
+        if (e.ctrlKey && e.key.toLowerCase() === "s" && await saveScript()) return;
+        if (_page !== 4) return;
+        if (e.ctrlKey && e.key.toLowerCase() === "c") {
+            await neet.stopProcesses();
+            return;
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === "l") return clear();
+        if (!cursorOn) return;
+        lastType = Date.now();
+        if (e.ctrlKey && e.key.toLowerCase() === "v") {
+            const t = await navigator.clipboard.readText();
+            if (t) type(t);
+            return;
+        }
+        if (e.key.length === 1 && !e.ctrlKey) type(e.key);
+        if (e.key === "ArrowRight") updateCursor(cursorIndex++);
+        if (e.key === "ArrowLeft") updateCursor(cursorIndex--);
+        if (e.key === "ArrowUp") historyMove(-1);
+        if (e.key === "ArrowDown") historyMove(1);
+        if (e.key === "Backspace") backspace();
+        if (e.key === "Enter") enter();
+    });
+
+    const showPopup = () => {
+        document.querySelector(".popup").style.pointerEvents = "";
+        document.querySelector(".popup").style.opacity = "1";
+        document.querySelector(".popup-container").style.transform = "translateY(0)";
+    };
+    const hidePopup = () => {
+        document.querySelector(".popup").style.opacity = "";
+        document.querySelector(".popup-container").style.transform = "";
+        setTimeout(() => {
+            document.querySelector(".popup").style.pointerEvents = "none";
+            document.querySelector(".popup-content").innerHTML = "";
+        });
+    };
+    document.querySelector(".popup-close").addEventListener("click", () => hidePopup());
+</script>
