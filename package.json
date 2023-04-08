@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "start": "tsc && electron-rebuild && electron ."
+  },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "OguzhanUmutlu",
+  "license": "MIT",
   "dependencies": {
     "electron": "^23.2.1",
     "electron-rebuild": "^3.2.9",

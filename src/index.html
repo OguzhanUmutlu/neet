@@ -1,4 +1,4 @@
-<!--suppress CssUnusedSymbol, JSUnusedGlobalSymbols -->
+<!--suppress CssUnusedSymbol, JSUnusedGlobalSymbols, CssNonIntegerLengthInPixels -->
 <head>
     <title>Neet</title>
 </head>
@@ -57,6 +57,20 @@
         margin: 0;
         background: #36393F;
         overflow: hidden;
+    }
+
+    .attention {
+        animation-iteration-count: infinite;
+        animation-duration: 1.5s;
+        animation-name: attention;
+    }
+
+    .attention-err {
+        --attention-color: #b95b5b;
+    }
+
+    .attention-msg {
+        --attention-color: #81b95b;
     }
 
     .popup {
@@ -302,11 +316,14 @@
         display: flex;
         flex-wrap: wrap;
         min-height: 18.4px;
+        user-select: text;
     }
 
     .message {
         font-family: monospace, serif;
         height: max-content;
+        user-select: text;
+        display: block;
     }
 
     .cursor {
@@ -363,6 +380,18 @@
             rotate: 0;
         }
     }
+
+    @keyframes attention {
+        50% {
+            text-shadow: 0 0 30px var(--attention-color);
+            color: var(--attention-color);
+        }
+
+        100% {
+            text-shadow: 0 0 30px transparent;
+            color: white;
+        }
+    }
 </style>
 <script>addEventListener("keydown", e => e.key === "F5" && location.reload())</script>
 <script type="module">
@@ -375,6 +404,7 @@
     });
     let _page = -1;
     const setPage = id => {
+        if (id === 4) document.querySelector("[data-btn='4']").classList.remove("attention");
         if (id === 3) {
             document.querySelector(".popup-content").innerHTML = `<h1>Create Script</h1><br><br><input style="background: #4e5259">`;
             document.querySelector(".popup-buttons").innerHTML = `<div class="popup-button" style="background: #00a900">Create</div><div class="popup-button" style="background: #be0000">Cancel</div>`;
@@ -545,6 +575,7 @@
     let prm = "";
     const history = [""];
     let currentHistory = 0;
+    window.cursorD = cursorD;
     /**
      * @param {string} str
      * @param {string} color
@@ -558,7 +589,11 @@
             else d.innerText = i;
             cursorD.insertAdjacentElement("beforebegin", d);
             cursorIndex++;
-            prm += i;
+            if (isPrompting) {
+                // TODO: handle
+            } else {
+                prm = Array.from(cursorD.parentElement.children).map(i => i.innerText.replaceAll("\xa0", " ")).join("").substring(2);
+            }
         });
         messagesD.scrollTop = messagesD.scrollHeight;
     };
@@ -606,7 +641,6 @@
     const onPromptingChange = to => {
     };
     const onProcessesChange = () => {
-        console.log(runningScripts)
         updateScriptIcons();
     };
     let isPrompting = false;
@@ -653,15 +687,21 @@
         const messages = await neet.getMessages();
         messages.forEach(m => {
             if (!m) return;
-            if (typeof m === "string") {
-                m.split("\n").forEach(i => {
-                    if (!i) return;
-                    type(i);
-                    const d = document.createElement("div");
-                    d.classList.add("line");
-                    d.appendChild(cursorD);
-                    messagesD.appendChild(d);
-                });
+            if (m.event === "response" || m.event === "error") {
+                if (_page !== 4) {
+                    document.querySelector("[data-btn='4']").classList.add("attention");
+                    if (m.event === "error") document.querySelector("[data-btn='4']").classList.add("attention-err");
+                    if (m.event === "response") document.querySelector("[data-btn='4']").classList.add("attention-res");
+                }
+                for (let i = 0; i < m.content.length; i++) {
+                    const s = m.content[i];
+                    if (s === "\n") {
+                        const d = document.createElement("div");
+                        d.classList.add("line");
+                        d.appendChild(cursorD);
+                        messagesD.appendChild(d);
+                    } else type(s);
+                }
                 return;
             }
             if (m.event === "clear") clear();
@@ -690,7 +730,11 @@
         if (e.ctrlKey && e.key.toLowerCase() === "s" && await saveScript()) return;
         if (_page !== 4) return;
         if (e.ctrlKey && e.key.toLowerCase() === "c") {
-            await neet.stopProcesses();
+            const selection = getSelection();
+            if (selection.toString()) {
+                await navigator.clipboard.writeText(selection.getRangeAt(0).toString());
+                selection.removeAllRanges();
+            } else await neet.stopProcesses();
             return;
         }
         if (e.ctrlKey && e.key.toLowerCase() === "l") return clear();
@@ -698,7 +742,7 @@
         lastType = Date.now();
         if (e.ctrlKey && e.key.toLowerCase() === "v") {
             const t = await navigator.clipboard.readText();
-            if (t) type(t);
+            if (t) type(t.replaceAll("\xa0", " ").replaceAll("\n", ""));
             return;
         }
         if (e.key.length === 1 && !e.ctrlKey) type(e.key);
@@ -708,6 +752,7 @@
         if (e.key === "ArrowDown") historyMove(1);
         if (e.key === "Backspace") backspace();
         if (e.key === "Enter") enter();
+        if (e.key.startsWith("Arrow")) e.preventDefault();
     });
 
     const showPopup = () => {

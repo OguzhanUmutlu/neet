@@ -1,13 +1,14 @@
-const {app, globalShortcut, BrowserWindow, ipcMain, shell} = require("electron");
+const {app, globalShortcut, BrowserWindow, ipcMain} = require("electron");
 const fs = require("fs");
 if (!fs.existsSync("./cache.json")) fs.writeFileSync("./cache.json", JSON.stringify({
     scripts: {}
-}))
+}));
+
 let cache = require("./cache.json");
 module.exports = {cache: () => cache};
 const path = require("path");
 const saveCache = () => fs.writeFileSync("./cache.json", JSON.stringify(cache, null, 2));
-const {scripts, msg, prompt, stop} = require("./src/ScriptManager");
+const {msg, prompt_, stop_} = require("./src/ScriptManager");
 
 (async () => {
     await new Promise(r => app.on("ready", r));
@@ -15,15 +16,15 @@ const {scripts, msg, prompt, stop} = require("./src/ScriptManager");
     globalShortcut.register("CommandOrControl+1", () => browser.webContents.toggleDevTools());
     ipcMain.handle("minimize", () => browser.minimize());
     ipcMain.handle("getCache", () => cache);
-    ipcMain.handle("setCache", (_, o) => {
+    ipcMain.handle("setCache", (event: any, o: any) => {
         cache = o;
         saveCache();
     });
     ipcMain.handle("getProcesses", () => Object.keys(scripts));
-    ipcMain.handle("stopProcesses", () => stop());
-    ipcMain.handle("stopProcess", (_, n) => stop(n));
+    ipcMain.handle("stopProcesses", () => stop_(""));
+    ipcMain.handle("stopProcess", (_: any, n: any) => stop_(n));
     ipcMain.handle("getMessages", () => msg());
-    ipcMain.on("sendPrompt", (_, p) => prompt(p));
+    ipcMain.on("sendPrompt", (_: any, p: any) => prompt_(p));
 
     const browser = new BrowserWindow({
         width: 800,
