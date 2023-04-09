@@ -12,7 +12,6 @@ const keys = [
 
 type TypeTerminalMessage =
     { event: "input", value: boolean }
-    | { event: "maximize", value: boolean }
     | { event: "clear" }
     | {
     event: "message", message: {
@@ -136,7 +135,7 @@ const tickScript = async (lines: string[], name: string = "", variables: Record<
         } else script.index++;
         return null;
     };
-    const line = (script ? lines[script.index] : lines[0]).trimStart();
+    const line = (script && !pseudo ? lines[script.index] : lines[0]).trimStart();
     if (!line || line[0] === "#" || line[0] + line[1] === "//") return increaseIndex();
     const arg = line.split(" ");
     const cmd = findCommand(arg[0]);
@@ -168,7 +167,8 @@ const tickScript = async (lines: string[], name: string = "", variables: Record<
             lines,
             variables,
             sendUsage: () => {
-                Terminal.message(prefix + "Invalid usage!\n\n" + cmd.names[0] + " " + parseUsage(cmd.usage) + "\n", "error", "red")
+                Terminal.message(prefix + "Invalid usage!\n\n" + cmd.names[0] + " " + parseUsage(cmd.usage) + "\n", "error", "red");
+                hasError = true;
             },
             script,
             scriptName: name,
@@ -258,8 +258,8 @@ registerCommand("goto", (args, {err, sendUsage, setIndex, currentIndex, vr, scri
     const index = parseInt(vr(args[0]));
     if (!script) return err("Altering line index is only allowed in scripts.");
     if (isNaN(index) || index < 1) return sendUsage();
-    if (index === currentIndex()) return err("You cannot go to the same line!");
-    setIndex(index + 1);
+    if (index - 1 === currentIndex()) return err("You cannot go to the same line!");
+    setIndex(index - 1);
 }, "Goes to a line in the script.", [
     ["line", "The target line"]
 ]);
@@ -282,7 +282,7 @@ registerCommand("print", async (args, {res, vr}) => {
 ], "string");
 
 registerCommand("wait", async (args, {sendUsage, vr}) => {
-    const delay = parseInt(vr(args[0]));
+    const delay = parseFloat(vr(args[0]));
     if (isNaN(delay)) return sendUsage();
     await new Promise(r => setTimeout(r, delay * 1000));
 }, "Stops the process for the given time.", [
@@ -341,7 +341,6 @@ registerCommand(["deletevar", "delvar", "rmvar", "removevar"], async (args, {err
 
 registerCommand(["isnumeric", "isnum"], async (args, {res, sendUsage, vr}) => {
     const num = parseInt(vr(args[0]));
-    if (!args[0]) return sendUsage();
     res(isNaN(num) ? "0" : "1");
 }, "Checks if something is numeric.", [
     ["text", "A text"]
@@ -452,11 +451,10 @@ registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables,
     const v = variables[variable];
     if (v && v.type !== "string") return err("Expected variable " + variable + " to be string. Got: " + v.type);
     if (r) assign(variable, r, "string");
-    res(r ? "1" : "0");
 }, "Assigns the variable a result of a code.", [
     ["variable", "The variable's name."],
     ["code", "The code."]
-], "If succeeds 1, unless 0");
+]);
 
 registerCommand(["stop", "exit"], async (args, {res, err, script}) => {
     if (!script) return err("Exiting is only allowed in scripts.");
@@ -520,6 +518,51 @@ registerCommand("position", async (args, {res, err, script, vr, assign, sendUsag
     ["variableY", "The variable that will be used for the Y value of the mouse."]
 ]);
 
+registerCommand("pixel", async (args, {res, err, script, vr, sendUsage}) => {
+    const x = parseFloat(vr(args[0]));
+    const y = parseFloat(vr(args[1]));
+    if (isNaN(x) || isNaN(y)) return sendUsage();
+    res(robot.getPixelColor(x, y));
+}, "Scrolls the mouse in any direction.", [
+    ["x", "The X coordinate of the scroll."],
+    ["y", "The Y coordinate of the scroll."]
+], "Color string, Example: #123456");
+
+registerCommand(["screensize", "size"], async (args, {res, err, script, vr, assign, sendUsage}) => {
+    const vw = args[0];
+    const vh = args[1];
+    if (!vw || !vh) return sendUsage();
+    const pos = robot.getScreenSize();
+    if (!assign(vw, pos.width + "", "string")) return err("Variable names cannot start with numbers.");
+    if (!assign(vh, pos.height + "", "string")) return err("Variable names cannot start with numbers.");
+}, "Gets the width and height of the screen.", [
+    ["variableWidth", "The variable that will be used for the width of the screen."],
+    ["variableHeight", "The variable that will be used for the height of the screen."]
+]);
+
+registerCommand(["mousedelay", "msdelay"], async (args, {res, err, script, vr, sendUsage}) => {
+    const delay = parseFloat(vr(args[0]));
+    if (isNaN(delay)) return sendUsage();
+    robot.setMouseDelay(delay * 1000);
+}, "Sets the typing delay of the mouse.", [
+    ["delay", "The delay of typing to mouse in SECONDS."]
+]);
+
+registerCommand(["keyboarddelay", "kbdelay"], async (args, {res, err, script, vr, sendUsage}) => {
+    const delay = parseFloat(vr(args[0]));
+    if (isNaN(delay)) return sendUsage();
+    robot.setKeyboardDelay(delay * 1000);
+}, "Sets the typing delay of the keyboard.", [
+    ["delay", "The delay of typing to keyboard in SECONDS."]
+]);
+
+const waitingPrompts = [];
+
+registerCommand("readline", async (args, {res, err, script, vr, sendUsage}) => {
+    Terminal.enableInput();
+
+}, "Reads line from the terminal.", [],  "string");
+
 // DONE $$n(new line)
 // DONE $$s(space)
 // DONE $#PI
@@ -550,11 +593,11 @@ registerCommand("position", async (args, {res, err, script, vr, assign, sendUsag
 // DONE DRAG            x: float y: float
 // DONE SCROLL          x: float y: float
 // DONE POSITION        v1 v2
-// TODO PIXEL           x: float y: float v
-// TODO SCREENSIZE      v1 v2
-// TODO MOUSEDELAY      seconds: float
-// TODO KEYBOARDDELAY   seconds: float
-// TODO TYPE            text: string cpm?: float
+// DONE PIXEL           x: float y: float
+// DONE SCREENSIZE      v1 v2
+// DONE MOUSEDELAY      seconds: float
+// DONE KEYBOARDDELAY   seconds: float
+// DONE TYPE            text: string cpm?: float
 // TODO KEYTAP          key: string ...modifiers: alt, command, control, shift
 // TODO KEYDOWN         key: string ...modifiers: alt, command, control, shift
 // TODO KEYUP           key: string ...modifiers: alt, command, control, shift
@@ -605,6 +648,10 @@ registerCommand("position", async (args, {res, err, script, vr, assign, sendUsag
 // TODO FOREACH         v vInd vVal code: string
 // TODO REPEAT          v from: number to: number code: string
 // TODO ARGUMENTS
+// TODO TORGBA          hex: string
+// TODO TOHEX           r: number g: number b: number a: number
+
+// TODO: SELENIUM JS?
 
 let terminalVariables = {};
 
@@ -628,6 +675,5 @@ module.exports = {
     scripts_: scripts,
     msg: _msg,
     prompt_: _prompt_,
-    stop_: _stop_,
-    updateMaximize: (d: boolean) => terminalMessages.push({event: "maximize", value: d})
+    stop_: _stop_
 };

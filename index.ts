@@ -8,7 +8,7 @@ let cache = require("./cache.json");
 module.exports = {cache: () => cache};
 const path = require("path");
 const saveCache = () => fs.writeFileSync("./cache.json", JSON.stringify(cache, null, 2));
-const {msg, prompt_, stop_, updateMaximize} = require("./src/ScriptManager");
+const {msg, prompt_, stop_} = require("./src/ScriptManager");
 
 (async () => {
     await new Promise(r => app.on("ready", r));
@@ -18,12 +18,6 @@ const {msg, prompt_, stop_, updateMaximize} = require("./src/ScriptManager");
         process.exit();
     });
     globalShortcut.register("CommandOrControl+1", () => browser.webContents.toggleDevTools());
-    ipcMain.handle("minimize", () => browser.minimize());
-    ipcMain.handle("maximize", () => {
-        if (browser.isMaximized()) browser.unmaximize();
-        else browser.maximize();
-    });
-    ipcMain.handle("isMaximized", () => browser.isMaximized());
     ipcMain.handle("getCache", () => cache);
     ipcMain.handle("setCache", (event: any, o: any) => {
         cache = o;
@@ -45,8 +39,6 @@ const {msg, prompt_, stop_, updateMaximize} = require("./src/ScriptManager");
         icon: __dirname + "/src/icon.png",
         show: false
     });
-    browser.on("maximize", () => updateMaximize(true));
-    browser.on("unmaximize", () => updateMaximize(false));
     const gotTheLock = app.requestSingleInstanceLock();
     if (!gotTheLock) app.quit();
     else app.on("second-instance", () => browser.focus());

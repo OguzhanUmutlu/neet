@@ -1,23 +1,22 @@
-<!--suppress CssUnusedSymbol, JSUnusedGlobalSymbols, CssNonIntegerLengthInPixels -->
+<!--suppress CssUnusedSymbol, JSUnusedGlobalSymbols, CssNonIntegerLengthInPixels, JSUnusedLocalSymbols -->
 <head>
     <title>Neet</title>
 </head>
 <body>
 <div class="navbar">
-    <div class="title"><img src="icon.png" class="icon"> Neet</div>
+    <!-- <div class="title"><img src="icon.png" class="icon"> Neet</div> -->
     <div class="buttons">
         <div class="button button-enabled" data-btn="1">My Scripts</div>
         <div class="button" style="display: none" data-btn="2">Script</div>
         <div class="button" data-btn="3">Create Script</div>
         <div class="button" data-btn="4">Terminal</div>
-        <div class="button" data-btn="5">Documentation</div>
+        <!-- <div class="button" data-btn="5">Documentation</div> -->
     </div>
 </div>
 <div class="container">
     <div class="page-scripts" style="display: none"></div>
     <div class="page-edit" style="display: none">
         <input type="text" class="name-input"><br><br>
-        <textarea class="code" spellcheck="false"></textarea>
     </div>
     <div class="page-create" style="display: none"></div>
     <div class="page-terminal" style="display: none">
@@ -29,6 +28,7 @@
     </div>
     <div class="page-docs" style="display: none"></div>
 </div>
+<div class="editor" style="opacity: 0"></div>
 <div class="popup" style="pointer-events: none">
     <div class="popup-container">
         <div class="popup-close">
@@ -47,6 +47,14 @@
         user-select: none;
         color: white;
         font-family: Calibri, serif;
+    }
+
+    .editor {
+        position: absolute;
+        top: 120px;
+        left: 0;
+        width: 100%;
+        height: calc(100% - 120px);
     }
 
     .icon {
@@ -152,15 +160,19 @@
 
     .buttons {
         position: absolute;
-        right: 0;
+        left: 50%;
+        translate: -50%;
         display: flex;
     }
 
     .button {
         padding: 15px 30px;
-        border-left: 3px solid #3c4046;
+        background: #3c4046;
         cursor: pointer;
         transition: background-color .3s;
+        white-space: nowrap;
+        margin-left: 10px;
+        margin-right: 10px;
     }
 
     .button:hover {
@@ -169,7 +181,6 @@
 
     .button-enabled {
         background-color: #4e5259 !important;
-        border-left: 3px solid #4e5259;
     }
 
     .container {
@@ -178,15 +189,21 @@
     }
 
     .page-scripts {
+        translate: 0 40px;
         height: calc(100% - 49px);
         overflow-x: hidden;
         overflow-y: auto;
     }
 
     .script {
-        border-bottom: 2px solid #3c4046;
+        border: 3px solid #696d75;
         padding: 15px;
+        margin-left: 60px;
+        margin-right: 60px;
+        width: calc(100% - 150px);
         transition: scale .3s, background-color .3s;
+        margin-bottom: 23px;
+        border-radius: 5px;
     }
 
     .script:hover {
@@ -198,6 +215,10 @@
         display: flex;
         width: max-content;
         translate: 1000%;
+    }
+
+    .right > div {
+        margin-left: 10px;
     }
 
     .last-edit {
@@ -305,12 +326,6 @@
         width: calc(100% - 30px);
     }
 
-    .code {
-        border-radius: 0;
-        width: 100%;
-        height: calc(100% - 155px);
-    }
-
     ::-webkit-scrollbar {
         width: 10px;
     }
@@ -353,8 +368,73 @@
         }
     }
 </style>
+<script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
 <script>addEventListener("keydown", e => e.key === "F5" && location.reload())</script>
 <script type="module">
+    require.config({paths: {"vs": "../node_modules/monaco-editor/min/vs"}});
+    await new Promise(r => require(["vs/editor/editor.main"], r));
+    monaco.editor.defineTheme("Neet", {
+        "base": "vs-dark",
+        "inherit": true,
+        "colors": {
+            "editor.background": "#36393F",
+            "editor.foreground": "#FFFFFF",
+            "editorLineNumber.foreground": "#8d8d8d",
+            "editorLineNumber.activeForeground": "#fff"
+        },
+        "rules": [
+            {
+                token: "custom-first-word",
+                foreground: "#0000ff",
+                fontStyle: "bold"
+            }
+        ]
+    });
+    monaco.languages.register({
+        id: "Neet",
+        extensions: [".neet"],
+        aliases: ["NeetLang"],
+        mimetypes: ["text/neet"]
+    });
+    monaco.languages.setLanguageConfiguration("Neet", {});
+
+    class IState {
+        constructor(v = {}) {
+            this.val = v;
+        };
+
+        equals(s) {
+            return s.val === this.val;
+        };
+
+        clone() {
+            return new IState(this.val);
+        };
+    }
+
+    class ILineTokens {
+        constructor(tokens, endState) {
+            this.tokens = tokens;
+            this.endState = endState;
+        };
+    }
+
+    monaco.languages.setTokensProvider("Neet", {
+        getInitialState() {
+            return new IState();
+        },
+        tokenize(line, state) {
+            return new ILineTokens([
+                {
+                    startIndex: 5,
+                    scopes: "custom-first-word"
+                }
+            ], state);
+        }
+    });
+    const codeD = document.querySelector(".editor");
+    const editor = monaco.editor.create(codeD, {theme: "Neet", automaticLayout: true});
+    //TODO
     document.querySelectorAll(".button").forEach(i => {
         const id = i.getAttribute("data-btn") * 1;
         if (!id) return;
@@ -373,7 +453,8 @@
                 if (cache.scripts[name]) return infoPopup("This script already exists!");
                 cache.scripts[name] = {
                     editedAt: Date.now(),
-                    code: ""
+                    code: "",
+                    permissions: []
                 };
                 await neet.setCache(cache);
                 await refreshScripts();
@@ -399,9 +480,10 @@
             else i.classList.remove("button-enabled");
         });
         document.querySelector(`[data-btn="2"]`).style.display = id === 2 ? "" : "none";
-        ["scripts", "edit", "create", "terminal", "docs"].forEach((i, j) => {
+        ["scripts", "edit", "create", "terminal"/*, "docs"*/].forEach((i, j) => {
             document.querySelector(".container > .page-" + i).style.display = j + 1 === id ? "" : "none";
         });
+        document.querySelector(".editor").style.display = _page === 2 ? "" : "none";
     };
     let editingScriptName = null;
     let lastCode = null;
@@ -470,7 +552,7 @@
                         case "edit":
                             document.querySelector(".name-input").value = name;
                             lastCode = cache.scripts[name].code;
-                            document.querySelector(".code").value = lastCode;
+                            editor.setValue(lastCode);
                             editingScriptName = name;
                             await setPage(2);
                             break;
@@ -499,7 +581,7 @@
             });
             scriptsDiv.appendChild(div);
             const right = div.querySelector(".right");
-            const res = () => right.style.translate = (innerWidth - right.getBoundingClientRect().width - 30) + "px";
+            const res = () => right.style.translate = (innerWidth - right.getBoundingClientRect().width - 150) + "px";
             setTimeout(res, 100);
             addEventListener("resize", res);
         });
@@ -508,7 +590,7 @@
     setPage(1);
     const saveScript = async () => {
         if (_page !== 2 || (
-            lastCode === document.querySelector(".code").value &&
+            lastCode === editor.getValue() &&
             editingScriptName === document.querySelector(".name-input").value
         )) return true;
         const name = document.querySelector(".name-input").value;
@@ -521,7 +603,7 @@
             delete cache.scripts[editingScriptName];
             editingScriptName = newName;
         }
-        cache.scripts[editingScriptName].code = lastCode = document.querySelector(".code").value;
+        cache.scripts[editingScriptName].code = lastCode = editor.getValue();
         cache.scripts[editingScriptName].editedAt = Date.now();
         await neet.setCache(cache);
         return true;
@@ -573,6 +655,14 @@
     const type = (str, color, backgroundColor, readonly) => {
         str.split("").forEach(i => intTypeChar(i, color, backgroundColor, readonly));
         messagesD.scrollTop = messagesD.scrollHeight;
+        updateLineColoring();
+    };
+    const updateLineColoring = () => {
+        if (!inputOn) return;
+        let elements = Array.from(cursorD.parentElement.children).filter(i => i !== cursorD && !i.classList.contains("readonly"));
+        const index = elements.findIndex(i => i.innerText === "\xa0");
+        if (index !== -1) elements = elements.slice(0, index);
+        elements.forEach(i => i.style.color = "#ffff4e");
     };
     const backspace = () => {
         const lineD = cursorD.parentElement;
@@ -644,8 +734,6 @@
             } else if (m.event === "scripts") {
                 runningScripts = m.scripts;
                 onProcessesChange();
-            } else if (m.event === "maximize") {
-                console.log(m.value);
             }
         });
         setTimeout(messageLoop);
@@ -654,7 +742,7 @@
     let lastType = 0;
     setInterval(() => {
         if (_page !== 2) return;
-        canSave = lastCode !== document.querySelector(".code").value ||
+        canSave = lastCode !== editor.getValue() ||
             editingScriptName !== document.querySelector(".name-input").value;
         document.querySelector("[data-btn='2']").innerHTML = "Script" + (canSave ? "*" : "");
     });
@@ -757,4 +845,5 @@
         },
         {name: "Cancel", color: "#be0000", callback: () => callback(null), escapeButton: true}
     ], true);
+    codeD.style.opacity = "1";
 </script>
