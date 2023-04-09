@@ -3,12 +3,8 @@
     <title>Neet</title>
 </head>
 <body>
-<div class="frame"></div>
-<div class="frame-title">Neet</div>
-<div class="frame-close">x</div>
-<div class="frame-minimize">-</div>
 <div class="navbar">
-    <div class="title">Neet</div>
+    <div class="title"><img src="icon.png" class="icon"> Neet</div>
     <div class="buttons">
         <div class="button button-enabled" data-btn="1">My Scripts</div>
         <div class="button" style="display: none" data-btn="2">Script</div>
@@ -23,7 +19,7 @@
         <input type="text" class="name-input"><br><br>
         <textarea class="code" spellcheck="false"></textarea>
     </div>
-    <div class="page-create" style="display: none">sa</div>
+    <div class="page-create" style="display: none"></div>
     <div class="page-terminal" style="display: none">
         <div class="messages">
             <div class="line">
@@ -31,7 +27,7 @@
             </div>
         </div>
     </div>
-    <div class="page-docs" style="display: none">as</div>
+    <div class="page-docs" style="display: none"></div>
 </div>
 <div class="popup" style="pointer-events: none">
     <div class="popup-container">
@@ -51,6 +47,12 @@
         user-select: none;
         color: white;
         font-family: Calibri, serif;
+    }
+
+    .icon {
+        width: 32px;
+        height: 32px;
+        translate: -8px 3px;
     }
 
     body {
@@ -133,51 +135,8 @@
         scale: 1.1;
     }
 
-    .frame {
-        position: absolute;
-        -webkit-app-region: drag;
-        width: calc(100% - 64px);
-        height: 20px;
-        background: #3c4046;
-    }
-
-    .frame-title {
-        position: absolute;
-        color: #c0c0c0;
-        left: 10px;
-    }
-
-    .frame-close {
-        position: absolute;
-        right: 0;
-        width: 32px;
-        height: 20px;
-        text-align: center;
-        background: #3c4046;
-        cursor: pointer;
-    }
-
-    .frame-close:hover {
-        background: red;
-    }
-
-    .frame-minimize {
-        position: absolute;
-        right: 32px;
-        width: 32px;
-        height: 20px;
-        text-align: center;
-        cursor: pointer;
-        background: #3c4046;
-    }
-
-    .frame-minimize:hover {
-        background: #3c8eff;
-    }
-
     .navbar {
         position: absolute;
-        top: 20px;
         width: 100%;
         height: 49px;
         display: flex;
@@ -185,6 +144,7 @@
     }
 
     .navbar > .title {
+        display: flex;
         margin-left: 30px;
         margin-top: 5px;
         font-size: 30px;
@@ -213,12 +173,12 @@
     }
 
     .container {
-        translate: 0 69px;
+        translate: 0 49px;
         height: 100%;
     }
 
     .page-scripts {
-        height: calc(100% - 69px);
+        height: calc(100% - 49px);
         overflow-x: hidden;
         overflow-y: auto;
     }
@@ -305,7 +265,7 @@
         position: absolute;
         top: 0;
         width: 100%;
-        height: calc(100% - 69px);
+        height: calc(100% - 49px);
         background-color: black;
         user-select: text;
         word-wrap: anywhere;
@@ -395,41 +355,40 @@
 </style>
 <script>addEventListener("keydown", e => e.key === "F5" && location.reload())</script>
 <script type="module">
-    document.querySelector(".frame-close").addEventListener("click", () => close())
-    document.querySelector(".frame-minimize").addEventListener("click", () => neet.minimize());
     document.querySelectorAll(".button").forEach(i => {
         const id = i.getAttribute("data-btn") * 1;
         if (!id) return;
         i.addEventListener("click", () => setPage(id));
     });
     let _page = -1;
-    const setPage = id => {
+    let canSave = false;
+    const setPage = async id => {
         if (id === 4) document.querySelector("[data-btn='4']").classList.remove("attention");
         if (id === 3) {
-            document.querySelector(".popup-content").innerHTML = `<h1>Create Script</h1><br><br><input style="background: #4e5259">`;
-            document.querySelector(".popup-buttons").innerHTML = `<div class="popup-button" style="background: #00a900">Create</div><div class="popup-button" style="background: #be0000">Cancel</div>`;
-            showPopup();
-            document.querySelectorAll(".popup-buttons").forEach((i, j) => {
-                i.addEventListener("click", async () => {
-                    hidePopup();
-                    if (j === 0) {
-                        const name = document.querySelector(".popup-content > input").value;
-                        if (name.length < 1) return alert("Script names should have at least a character!");
-                        if (!/[a-zA-Z]/.test(name[0])) return alert("Script names should start with a letter!");
-                        if (!/^[a-zA-Z][a-zA-Z\d]*$/.test(name)) return alert("Script names should only include letters and numbers!");
-                        if (cache.scripts[name]) return alert("This script already exists!");
-                        cache.scripts[name] = {
-                            editedAt: Date.now(),
-                            code: ""
-                        };
-                        await neet.setCache(cache);
-                        await refreshScripts();
-                    }
-                });
+            inputPopup("Create Script", async name => {
+                if (name === null) return hidePopup();
+                if (name.length < 1) return infoPopup("Script names should have at least a character!");
+                if (!/[a-zA-Z]/.test(name[0])) return infoPopup("Script names should start with a letter!");
+                if (!/^[a-zA-Z][a-zA-Z\d]*$/.test(name)) return infoPopup("Script names should only include letters and numbers!");
+                if (cache.scripts[name]) return infoPopup("This script already exists!");
+                cache.scripts[name] = {
+                    editedAt: Date.now(),
+                    code: ""
+                };
+                await neet.setCache(cache);
+                await refreshScripts();
+                hidePopup();
             });
             return;
         }
-        if (_page !== id && id === 1) refreshScripts();
+        if (id !== 2 && _page === 2 && canSave) await new Promise(r => questionPopup("Do you want to save the script file?", res => {
+            if (res) {
+                if (!saveScript()) return;
+            }
+            r();
+            hidePopup();
+        }));
+        if (_page !== id && id === 1) await refreshScripts();
         _page = id;
         if (_page !== 2) {
             editingScriptName = null;
@@ -513,27 +472,21 @@
                             lastCode = cache.scripts[name].code;
                             document.querySelector(".code").value = lastCode;
                             editingScriptName = name;
-                            setPage(2);
+                            await setPage(2);
                             break;
                         case "delete":
-                            document.querySelector(".popup-content").innerHTML = `<h3>Are you sure you want to delete this script?</h3>`;
-                            document.querySelector(".popup-buttons").innerHTML = `<div class="popup-button" style="background: #00a900">Yes</div><div class="popup-button" style="background: #be0000">No</div>`;
-                            showPopup();
-                            document.querySelectorAll(".popup-buttons").forEach((i, j) => {
-                                i.addEventListener("click", async () => {
-                                    hidePopup();
-                                    if (j === 0) {
-                                        delete cache.scripts[name];
-                                        await neet.setCache(cache);
-                                        await refreshScripts();
-                                    }
-                                });
+                            questionPopup("Are you sure you want to delete this script?", async res => {
+                                if (!res) return hidePopup();
+                                delete cache.scripts[name];
+                                await neet.setCache(cache);
+                                await refreshScripts();
+                                hidePopup();
                             });
                             break;
                         case "settings":
                             break;
                         case "run":
-                            if (isPrompting) return;
+                            if (!inputOn) return;
                             clearLine();
                             type("run " + name);
                             enter();
@@ -557,7 +510,11 @@
         if (_page !== 2 || (
             lastCode === document.querySelector(".code").value &&
             editingScriptName === document.querySelector(".name-input").value
-        )) return false;
+        )) return true;
+        const name = document.querySelector(".name-input").value;
+        if (name.length < 1) return infoPopup("Script names should have at least a character!");
+        if (!/[a-zA-Z]/.test(name[0])) return infoPopup("Script names should start with a letter!");
+        if (!/^[a-zA-Z][a-zA-Z\d]*$/.test(name)) return infoPopup("Script names should only include letters and numbers!");
         if (editingScriptName !== document.querySelector(".name-input").value) {
             const newName = document.querySelector(".name-input").value;
             cache.scripts[newName] = cache.scripts[editingScriptName];
@@ -572,52 +529,8 @@
     const cursorD = document.querySelector(".cursor");
     const messagesD = document.querySelector(".messages");
     let cursorIndex = 0;
-    let prm = "";
     const history = [""];
     let currentHistory = 0;
-    window.cursorD = cursorD;
-    /**
-     * @param {string} str
-     * @param {string} color
-     */
-    const type = (str, color = "white") => {
-        str.split("").forEach(i => {
-            const d = document.createElement("div");
-            d.classList.add("message");
-            d.style.color = color;
-            if (i === " ") d.innerHTML = "&nbsp;";
-            else d.innerText = i;
-            cursorD.insertAdjacentElement("beforebegin", d);
-            cursorIndex++;
-            if (isPrompting) {
-                // TODO: handle
-            } else {
-                prm = Array.from(cursorD.parentElement.children).map(i => i.innerText.replaceAll("\xa0", " ")).join("").substring(2);
-            }
-        });
-        messagesD.scrollTop = messagesD.scrollHeight;
-    };
-    const updateCursor = () => {
-        const lineD = cursorD.parentElement;
-        const children = Array.from(lineD.children).filter(i => i !== cursorD).slice(2);
-        if (cursorIndex < 0) cursorIndex = 0;
-        if (cursorIndex > prm.length) cursorIndex = prm.length;
-        const i = children[cursorIndex];
-        if (!i) return lineD.insertAdjacentElement("beforeend", cursorD);
-        i.insertAdjacentElement("beforebegin", cursorD);
-    };
-    const backspace = () => {
-        const lineD = cursorD.parentElement;
-        const children = Array.from(lineD.children).filter(i => i !== cursorD).slice(2);
-        if (cursorIndex < 0) cursorIndex = 0;
-        if (cursorIndex > prm.length) cursorIndex = prm.length;
-        const i = children[cursorIndex - 1];
-        if (!i) return;
-        i.remove();
-        prm = prm.substring(0, cursorIndex - 1) + prm.substring(cursorIndex);
-        cursorIndex--;
-        updateCursor();
-    };
     let runningScripts = [];
     const updateScriptIcons = () => {
         document.querySelectorAll(".script").forEach(i => {
@@ -637,83 +550,102 @@
                 stop.style.display = "none";
             }
         });
-    }
+    };
+    let inputOn = true;
+    const getCurrentLine = () => Array.from(cursorD.parentElement.children).filter(i => i !== cursorD && !i.classList.contains("readonly")).map(i => i.innerText.replaceAll("\xa0", " ")).join("");
+    const intTypeChar = (char, color, backgroundColor, readonly) => {
+        if (char === "\n") {
+            let d = document.createElement("div");
+            d.classList.add("line");
+            d.appendChild(cursorD);
+            messagesD.appendChild(d);
+            return;
+        }
+        const d = document.createElement("div");
+        d.classList.add("message");
+        if (readonly) d.classList.add("readonly");
+        if (color) d.style.color = color;
+        if (char === " ") d.innerHTML = "&nbsp;";
+        else d.innerText = char;
+        cursorD.insertAdjacentElement("beforebegin", d);
+        cursorIndex++;
+    };
+    const type = (str, color, backgroundColor, readonly) => {
+        str.split("").forEach(i => intTypeChar(i, color, backgroundColor, readonly));
+        messagesD.scrollTop = messagesD.scrollHeight;
+    };
+    const backspace = () => {
+        const lineD = cursorD.parentElement;
+        const children = Array.from(lineD.children);
+        const index = children.indexOf(cursorD);
+        const i = children[index - 1];
+        if (!i || i.classList.contains("readonly")) return;
+        i.remove();
+    };
     const onPromptingChange = to => {
     };
     const onProcessesChange = () => {
         updateScriptIcons();
     };
-    let isPrompting = false;
-    let sP = null;
-    const enter = (send = true) => {
+    const enter = () => {
+        const text = getCurrentLine();
         let d = document.createElement("div");
         d.classList.add("line");
         d.appendChild(cursorD);
         messagesD.appendChild(d);
-        cursorOn = false;
-        if (send) {
-            if (prm) {
-                history[history.length - 1] = prm;
-                currentHistory = history.length;
-            }
-            sP = !!prm;
-            onPromptingChange(true);
-            isPrompting = true;
-            neet.sendPrompt(prm);
+        if (text) {
+            history.pop();
+            history.push(text, "");
+            currentHistory = history.length - 1;
         }
-        prm = "";
+        onPromptingChange(true);
+        neet.sendPrompt(text);
     };
-    const clear = () => {
-        Array.from(messagesD.children).filter(i => i !== cursorD.parentElement).forEach(i => i.remove());
-    };
-    const clearLine = () => {
-        Array.from(cursorD.parentElement.children).forEach(i => i !== cursorD && i.remove());
-        type("$ ", "#00ff00");
-        prm = "";
-    };
+    const clear = () => Array.from(messagesD.children).filter(i => i !== cursorD.parentElement).forEach(i => i.remove());
+    const clearLine = () => Array.from(cursorD.parentElement.children).forEach(i => i !== cursorD && !i.classList.contains("readonly") && i.remove());
+    const sendStart = () => type("$ ", "#00ff00", null, true);
     const historyMove = a => {
         currentHistory += a;
         if (currentHistory >= history.length || currentHistory < 0) return currentHistory -= a;
+        history[history.length - 1] = getCurrentLine();
         clearLine();
         type(history[currentHistory]);
     };
+    const moveCursor = a => {
+        const lineD = cursorD.parentElement;
+        const children = Array.from(lineD.children);
+        const index = children.indexOf(cursorD);
+        const i = children[index + a];
+        if (!i || i.classList.contains("readonly")) return;
+        i.insertAdjacentElement(a > 0 ? "afterend" : "beforebegin", cursorD);
+    };
     clearLine();
+    sendStart();
 
-    let cursorOn = true;
     setInterval(() => {
-        cursorD.style.background = (Date.now() % 1000 < 500 || lastType + 500 > Date.now()) && cursorOn ? "white" : "";
+        cursorD.style.background = (Date.now() % 1000 < 500 || lastType + 500 > Date.now()) && inputOn ? "white" : "";
     });
     const messageLoop = async () => {
         const messages = await neet.getMessages();
         messages.forEach(m => {
-            if (!m) return;
-            if (m.event === "response" || m.event === "error") {
+            if (m.event === "message") {
                 if (_page !== 4) {
                     document.querySelector("[data-btn='4']").classList.add("attention");
-                    if (m.event === "error") document.querySelector("[data-btn='4']").classList.add("attention-err");
-                    if (m.event === "response") document.querySelector("[data-btn='4']").classList.add("attention-res");
+                    if (m.message.type === "error") document.querySelector("[data-btn='4']").classList.add("attention-err");
+                    if (m.message.type === "response") document.querySelector("[data-btn='4']").classList.add("attention-res");
                 }
-                for (let i = 0; i < m.content.length; i++) {
-                    const s = m.content[i];
-                    if (s === "\n") {
-                        const d = document.createElement("div");
-                        d.classList.add("line");
-                        d.appendChild(cursorD);
-                        messagesD.appendChild(d);
-                    } else type(s);
-                }
+                type(m.message.content, m.message.color, m.message.backgroundColor, m.message.readonly);
                 return;
             }
             if (m.event === "clear") clear();
-            else if (m.event === "end") {
-                clearLine();
-                //if (sP) history.push("");
-                cursorOn = true;
-                onPromptingChange(false);
-                isPrompting = false;
+            else if (m.event === "input") {
+                inputOn = m.value;
+                if (inputOn) sendStart();
             } else if (m.event === "scripts") {
                 runningScripts = m.scripts;
                 onProcessesChange();
+            } else if (m.event === "maximize") {
+                console.log(m.value);
             }
         });
         setTimeout(messageLoop);
@@ -722,11 +654,12 @@
     let lastType = 0;
     setInterval(() => {
         if (_page !== 2) return;
-        const hasChanged = lastCode !== document.querySelector(".code").value ||
+        canSave = lastCode !== document.querySelector(".code").value ||
             editingScriptName !== document.querySelector(".name-input").value;
-        document.querySelector("[data-btn='2']").innerHTML = "Script" + (hasChanged ? "*" : "");
+        document.querySelector("[data-btn='2']").innerHTML = "Script" + (canSave ? "*" : "");
     });
     addEventListener("keydown", async e => {
+        if (popupOn) return;
         if (e.ctrlKey && e.key.toLowerCase() === "s" && await saveScript()) return;
         if (_page !== 4) return;
         if (e.ctrlKey && e.key.toLowerCase() === "c") {
@@ -738,7 +671,7 @@
             return;
         }
         if (e.ctrlKey && e.key.toLowerCase() === "l") return clear();
-        if (!cursorOn) return;
+        if (!inputOn) return;
         lastType = Date.now();
         if (e.ctrlKey && e.key.toLowerCase() === "v") {
             const t = await navigator.clipboard.readText();
@@ -746,27 +679,82 @@
             return;
         }
         if (e.key.length === 1 && !e.ctrlKey) type(e.key);
-        if (e.key === "ArrowRight") updateCursor(cursorIndex++);
-        if (e.key === "ArrowLeft") updateCursor(cursorIndex--);
+        if (e.key === "ArrowRight") moveCursor(1);
+        if (e.key === "ArrowLeft") moveCursor(-1);
         if (e.key === "ArrowUp") historyMove(-1);
         if (e.key === "ArrowDown") historyMove(1);
         if (e.key === "Backspace") backspace();
         if (e.key === "Enter") enter();
         if (e.key.startsWith("Arrow")) e.preventDefault();
     });
-
+    let popupOn = false;
     const showPopup = () => {
+        popupOn = true;
         document.querySelector(".popup").style.pointerEvents = "";
         document.querySelector(".popup").style.opacity = "1";
         document.querySelector(".popup-container").style.transform = "translateY(0)";
     };
     const hidePopup = () => {
+        popupOn = false;
         document.querySelector(".popup").style.opacity = "";
         document.querySelector(".popup-container").style.transform = "";
         setTimeout(() => {
             document.querySelector(".popup").style.pointerEvents = "none";
             document.querySelector(".popup-content").innerHTML = "";
         });
+        popupCallbacks = {enter: null, escape: null};
     };
-    document.querySelector(".popup-close").addEventListener("click", () => hidePopup());
+    let popupCallbacks = {
+        escape: null,
+        enter: null
+    };
+    const popupEnd = t => {
+        const fn = popupCallbacks[t];
+        if (fn) fn();
+    };
+    document.querySelector(".popup-close").addEventListener("click", () => popupEnd("escape"));
+    addEventListener("keydown", e => {
+        if (e.key === "Escape") popupEnd("escape");
+        if (e.key === "Enter") popupEnd("enter");
+    });
+    const customPopup = (title, buttons = [{name: "Yes", color: "#00a900", enterButton: true}, {
+        name: "No",
+        color: "#be0000",
+        escapeButton: true
+    }], input) => {
+        popupCallbacks.escape = () => buttons.forEach(i => i.escapeButton && i.callback && i.callback());
+        popupCallbacks.enter = () => buttons.forEach(i => i.enterButton && i.callback && i.callback());
+        const popC = document.querySelector(".popup-content");
+        popC.innerHTML = "";
+        popC.innerHTML = `<h1>${title}</h1><br><br>${input ? `<input style="background: #4e5259">` : ""}`;
+        const popB = document.querySelector(".popup-buttons");
+        popB.innerHTML = "";
+        buttons.forEach(i => {
+            const b = document.createElement("div");
+            b.classList.add("popup-button");
+            b.style.backgroundColor = i.color;
+            b.innerText = i.name;
+            b.addEventListener("click", () => {
+                if (i.callback) i.callback();
+            });
+            popB.appendChild(b);
+        });
+        showPopup();
+    };
+    const questionPopup = (question, callback = () => hidePopup()) => customPopup(question, [
+        {name: "Yes", color: "#00a900", callback: () => callback(true), enterButton: true},
+        {name: "No", color: "#be0000", callback: () => callback(false), escapeButton: true}
+    ]);
+    const infoPopup = (question, callback = () => hidePopup()) => customPopup(question, [
+        {name: "OK", color: "#00a900", callback: () => callback(), enterButton: true, escapeButton: true}
+    ]);
+    const inputPopup = (question, callback = () => hidePopup()) => customPopup(question, [
+        {
+            name: "Submit",
+            color: "#00a900",
+            callback: () => callback(document.querySelector(".popup-content > input").value),
+            enterButton: true
+        },
+        {name: "Cancel", color: "#be0000", callback: () => callback(null), escapeButton: true}
+    ], true);
 </script>

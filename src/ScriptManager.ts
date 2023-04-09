@@ -11,16 +11,24 @@ const keys = [
 ];
 
 type TypeTerminalMessage =
-    { event: "end" }
+    { event: "input", value: boolean }
+    | { event: "maximize", value: boolean }
     | { event: "clear" }
-    | { event: "response", content: string }
-    | { event: "error", content: string }
+    | {
+    event: "message", message: {
+        content: string,
+        type: "response" | "error",
+        color: string | undefined,
+        backgroundColor: string | undefined,
+        readonly: boolean
+    }
+}
     | { event: "scripts", scripts: string[] }
     | { event: any };
 type TypeVariable<T, V> = { type: T, value: V };
 type TypeStringVariable = TypeVariable<"string", string>;
 type TypeListVariable = TypeVariable<"list", string[]>;
-type TypeObjectVariable = TypeVariable<"list", Record<string, string>>;
+type TypeObjectVariable = TypeVariable<"object", Record<string, string>>;
 type TypeAnyVariable = TypeStringVariable | TypeListVariable | TypeObjectVariable;
 
 type TypeScript = {
@@ -30,9 +38,9 @@ type TypeScript = {
     onEnd: () => void
 };
 type TypeCommandHandler = (args: string[], options: {
-    print: (text: string) => void,
-    res: (text: string) => void,
-    err: (text: string) => void,
+    print: (text: string, color?: string | undefined, backgroundColor?: string | undefined) => void,
+    res: (text: string, color?: string | undefined, backgroundColor?: string | undefined) => void,
+    err: (text: string, color?: string | undefined, backgroundColor?: string | undefined) => void,
     setIndex: (index: number) => void,
     clear: () => void,
     currentIndex: () => number,
@@ -41,7 +49,9 @@ type TypeCommandHandler = (args: string[], options: {
     sendUsage: () => void,
     script: TypeScript | null,
     scriptName: string,
-    commandName: string
+    commandName: string,
+    assign: (name: string, value: string | string[] | Record<string, string>, type: "string" | "list" | "object") => boolean,
+    vr: (text: string) => string
 }) => void;
 
 type TypeCommand = {
@@ -57,7 +67,6 @@ const scripts: Map<string, TypeScript> = new Map;
 let terminalMessages: TypeTerminalMessage[] = [];
 const commands: TypeCommand[] = [];
 const getScripts = () => Array.from(scripts).map(i => i[0]);
-
 const registerCommand = (name: string | string[], handler: TypeCommandHandler, description: string, usage: [string, string][] = [], returns: string = "") => {
     if (!Array.isArray(name)) name = [name];
     name = name.map(i => i.toLowerCase());
@@ -72,15 +81,13 @@ const registerCommand = (name: string | string[], handler: TypeCommandHandler, d
     });
 };
 const findCommand = (name: string) => commands.find(i => i.names.includes(name.toLowerCase()));
-
 const eventLoop = async (name: string) => {
     const scr = scripts.get(name);
     if (!scr) return;
     await tickScript(scr.code.split("\n"), name, scr.variables);
     setTimeout(() => eventLoop(name));
 };
-
-const vr = (str: string, vars: Record<string, TypeAnyVariable>) => {
+const globalVar = (str: string, vars: Record<string, TypeAnyVariable>): string => {
     str = str || "";
     return str
         .replaceAll("$$n", "\n")
@@ -89,29 +96,37 @@ const vr = (str: string, vars: Record<string, TypeAnyVariable>) => {
         .replaceAll("$#E", Math.E.toString())
         .replaceAll(/\$[a-zA-Z][a-zA-Z\d]*/g, (match: string) => {
             const s = match.trim().substring(1);
-            console.log(match, s, vars[s]);
             const v = vars[s];
             if (v && v.type === "string") return v.value;
             return match;
         });
 };
-
 const parseUsage = (usage: [string, string][]) => usage.map(i => `[${i[0]}]`).join(" ") + "\n" + usage.map(i => `  ${i[0]} - ${i[1]}`).join("\n");
-
+let inputOn = true;
 const Terminal = {
-    response: (content: string) => terminalMessages.push({event: "response", content}),
-    error: (content: string) => terminalMessages.push({event: "error", content}),
-    end: () => terminalMessages.push({event: "end"}),
+    message: (content: string, type: "response" | "error", color?: string | undefined, backgroundColor?: string | undefined, readonly: boolean = true) => terminalMessages.push({
+        event: "message",
+        message: {content, type, color, backgroundColor, readonly}
+    }),
+    enableInput: () => {
+        if (inputOn) return;
+        terminalMessages.push({event: "input", value: true});
+        inputOn = true;
+    },
+    disableInput: () => {
+        if (!inputOn) return;
+        terminalMessages.push({event: "input", value: false});
+        inputOn = false;
+    },
     clear: () => terminalMessages.push({event: "clear"}),
     scripts: () => terminalMessages.push({event: "scripts", scripts: getScripts()})
 };
-
 const tickScript = async (lines: string[], name: string = "", variables: Record<string, TypeAnyVariable> = terminalVariables, pseudo = false): Promise<string | null> => {
     const script = name ? scripts.get(name) || null : null;
     const increaseIndex = () => {
         if (pseudo) return null;
         if (!script) {
-            Terminal.end();
+            Terminal.enableInput();
             return null;
         }
         if (script.index === lines.length - 1) {
@@ -125,56 +140,58 @@ const tickScript = async (lines: string[], name: string = "", variables: Record<
     if (!line || line[0] === "#" || line[0] + line[1] === "//") return increaseIndex();
     const arg = line.split(" ");
     const cmd = findCommand(arg[0]);
-    let result: ([string, boolean, boolean][]) = [];
-    let usageError = false;
-    let clearing = false;
     let indexUpdated = false;
+    let hasError = false;
+    let result = "";
     const prefix = script ? name + "#" + (script.index + 1) + " > " : "";
     if (cmd) {
         await cmd.handler(arg.slice(1), {
-            print: r => {
-                result.push([r, false, true]);
+            print: (r, c, bg) => {
+                Terminal.message(r, "response", c, bg);
+                result += r;
             },
-            res: r => {
-                result.push([r, false, false]);
+            res: (r, c, bg) => {
+                Terminal.message(prefix + r + "\n", "response", c, bg);
+                result += r + "\n";
             },
-            err: r => {
-                result.push([r, true, false]);
+            err: (r, c = "red", bg) => {
+                Terminal.message(prefix + r + "\n", "error", c, bg);
+                hasError = true;
             },
             setIndex: r => {
                 if (!script) return;
                 script.index = r;
                 indexUpdated = true;
             },
-            clear: () => {
-                clearing = true
-            },
+            clear: () => Terminal.clear(),
             currentIndex: () => script ? script.index : 0,
             lines,
             variables,
             sendUsage: () => {
-                usageError = true;
+                Terminal.message(prefix + "Invalid usage!\n\n" + cmd.names[0] + " " + parseUsage(cmd.usage) + "\n", "error", "red")
             },
             script,
             scriptName: name,
-            commandName: arg[0]
+            commandName: arg[0],
+            assign: (name: string, value: any, type: any): boolean => {
+                if (!isNaN(parseInt(name[0]))) return false;
+                variables[name] = {type, value};
+                return true;
+            },
+            vr: str => globalVar(str, variables)
         });
-        if (usageError) result.push([prefix + "Invalid usage!\n\n" + cmd.names[0] + " " + parseUsage(cmd.usage), true, false]);
-        if (clearing) Terminal.clear();
-    } else result.push([prefix + "'" + arg[0] + "' is not recognized as an internal command. Try using command 'help'", true, false]);
-    for (let i = 0; i < result.length; i++) {
-        const r = result[i];
-        if (r[1]) Terminal.error(r[0] + (!r[2] ? "\n" : ""));
-        else Terminal.response(r[0] + (!r[2] ? "\n" : ""));
+    } else {
+        Terminal.message("'" + arg[0] + "' is not recognized as an internal command. Try using command 'help'\n", "error", "red");
+        hasError = true
     }
-    if (result.some(i => i[1]) && script) {
+    if (hasError && script) {
         script.onEnd();
         scripts.delete(name);
         Terminal.scripts();
         return null;
     }
     if (!indexUpdated) increaseIndex();
-    return result.map((i, j, a) => i[0] + (i[2] || j === a.length - 1 ? "" : "\n")).join("");
+    return result;
 };
 
 registerCommand("run", async (args, {err, scriptName}) => {
@@ -202,6 +219,7 @@ registerCommand("run", async (args, {err, scriptName}) => {
             }
         };
         scripts.set(name, scr);
+        activeScripts.add(scr);
         Terminal.scripts();
         eventLoop(name);
     });
@@ -217,8 +235,8 @@ registerCommand(["help", "?"], (args, {res, err}) => {
         if (!cmd) return err("This command is not supported by the help utility.");
         res(
             "Command: " + cmd.names[0] +
+            (cmd.names.length > 1 ? "\nAliases: " + cmd.names.slice(1).join(", ") : "") +
             "\nDescription: " + cmd.description +
-            (cmd.names[1] ? "\nAliases: " + cmd.names.slice(1).join(", ") : "") +
             "\nUsage: " + cmd.names[0] + " " + parseUsage(cmd.usage) +
             "\nReturns: " + (cmd.returns ? cmd.returns : "nothing")
         );
@@ -236,18 +254,18 @@ registerCommand(["clear", "cls"], (args, {err, clear, script}) => {
     clear();
 }, "Clears the terminal.", []);
 
-registerCommand("goto", (args, {err, sendUsage, setIndex, currentIndex, variables, script}) => {
-    const index = parseInt(vr(args[0], variables));
+registerCommand("goto", (args, {err, sendUsage, setIndex, currentIndex, vr, script}) => {
+    const index = parseInt(vr(args[0]));
     if (!script) return err("Altering line index is only allowed in scripts.");
     if (isNaN(index) || index < 1) return sendUsage();
     if (index === currentIndex()) return err("You cannot go to the same line!");
-    setIndex(index);
+    setIndex(index + 1);
 }, "Goes to a line in the script.", [
     ["line", "The target line"]
 ]);
 
-registerCommand("visit", async (args, {err, sendUsage, currentIndex, lines, scriptName, variables, script}) => {
-    const index = parseInt(vr(args[0], variables));
+registerCommand("visit", async (args, {err, sendUsage, currentIndex, lines, scriptName, variables, vr, script}) => {
+    const index = parseInt(vr(args[0]));
     if (!script) return err("Running line is only allowed in scripts.");
     if (isNaN(index) || index !== Math.floor(index) || index < 1) return sendUsage();
     if (index === currentIndex()) return err("You cannot visit the same line!");
@@ -256,48 +274,40 @@ registerCommand("visit", async (args, {err, sendUsage, currentIndex, lines, scri
     ["line", "The target line"]
 ]);
 
-registerCommand("print", async (args, {res, variables}) => {
-    const str = vr(args.join(" "), variables);
+registerCommand("print", async (args, {res, vr}) => {
+    const str = vr(args.join(" "));
     res(str);
 }, "Prints out a text.", [
     ["message", "the message to print"]
 ], "string");
 
-registerCommand("wait", async (args, {sendUsage, variables}) => {
-    const delay = parseInt(vr(args[0], variables));
+registerCommand("wait", async (args, {sendUsage, vr}) => {
+    const delay = parseInt(vr(args[0]));
     if (isNaN(delay)) return sendUsage();
     await new Promise(r => setTimeout(r, delay * 1000));
 }, "Stops the process for the given time.", [
     ["delay", "The delay in seconds"]
 ]);
 
-registerCommand("if", async (args, {res, err, sendUsage, variables, scriptName}) => {
-    const n1 = args[0];
+registerCommand("if", async (args, {res, err, sendUsage, vr, variables, scriptName}) => {
+    let n1: string | number = vr(args[0]);
     const st = args[1];
-    const n2 = args[2];
+    let n2: string | number = vr(args[2]);
     const code = args.slice(3).join(" ").trim();
-    if (!n1 || n1[0] !== "$" || !["==", "!=", ">", "<", ">=", "<="].includes(st) || !n2 || n2[0] !== "$") return sendUsage();
-    const var1 = variables[n1];
-    if (!var1) return err("Invalid variable: " + n1);
-    if (var1.type !== "string") return err("Expected variable " + n1 + " to be string. Got: " + var1.type);
-    const var2 = variables[n2];
-    if (!var2) err("Invalid variable: " + n2);
-    if (var2.type !== "string") return err("Expected variable " + n2 + " to be string. Got: " + var2.type);
-    let val1: string | number = var1.value;
-    let val2: string | number = var2.value;
+    if (!n1 || !["==", "!=", ">", "<", ">=", "<="].includes(st) || !n2) return sendUsage();
     if ([">", "<", ">=", "<="].includes(st)) {
-        val1 = parseFloat(val1);
-        val2 = parseFloat(val2);
-        if (isNaN(val1)) return err("Expected variable " + n1 + " to have a numerical value.");
-        if (isNaN(val2)) return err("Expected variable " + n2 + " to have a numerical value.");
+        n1 = parseFloat(n1);
+        n2 = parseFloat(n2);
+        if (isNaN(n1)) return err("Expected first value to be a numeric.");
+        if (isNaN(n2)) return err("Expected second value to be a numeric.");
     }
-    const result = eval("val1 " + st + " val2");
+    const result = eval("n1 " + st + " n2");
     if (result) {
         if (code) await tickScript([code], scriptName, variables, true);
         else res("1");
     } else if (!code) res("0");
 }, "Checks if statement is true, and if it is, runs the code immediately.", [
-    ["variable1", "A variable."],
+    ["a", "First value."],
     ["comparator", "The comparator. " + `Can be:
     == Checks if two values are equal
     != Checks if two values are not equal
@@ -306,23 +316,22 @@ registerCommand("if", async (args, {res, err, sendUsage, variables, scriptName})
     >= Checks if the first value is bigger than or equal to the second value
     <= Checks if the first value is smaller than or equal to the second value
 `],
-    ["variable2", "A variable."],
+    ["b", "Second value."],
     ["code", "This code will be ran if the statement was correct"]
 ]);
 
-registerCommand(["var", "let"], async (args, {err, sendUsage, variables}) => {
-    const name = vr(args[0], variables);
-    const value = vr(args.slice(1).join(" "), variables);
+registerCommand(["var", "let"], async (args, {err, sendUsage, vr, assign}) => {
+    const name = vr(args[0]);
+    const value = vr(args.slice(1).join(" "));
     if (!name || !value) return sendUsage();
-    if (!isNaN(parseInt(name[0]))) return err("Variable names cannot start with numbers.");
-    variables[name] = {type: "string", value};
+    if (!assign(name, value, "string")) return err("Variable names cannot start with numbers.");
 }, "Sets a variable's value.", [
     ["name", "Variable name"],
     ["value", "Value of the variable"]
 ]);
 
-registerCommand(["deletevar", "delvar", "rmvar", "removevar"], async (args, {err, sendUsage, variables}) => {
-    const name = vr(args[0], variables);
+registerCommand(["deletevar", "delvar", "rmvar", "removevar"], async (args, {err, sendUsage, variables, vr}) => {
+    const name = vr(args[0]);
     if (!name) return sendUsage();
     if (!isNaN(parseInt(name[0]))) return err("Variable names cannot start with numbers.");
     delete variables[name];
@@ -330,18 +339,18 @@ registerCommand(["deletevar", "delvar", "rmvar", "removevar"], async (args, {err
     ["name", "Variable name"]
 ]);
 
-registerCommand(["isnumeric", "isnum"], async (args, {res, sendUsage, variables}) => {
-    const num = parseInt(vr(args[0], variables));
+registerCommand(["isnumeric", "isnum"], async (args, {res, sendUsage, vr}) => {
+    const num = parseInt(vr(args[0]));
     if (!args[0]) return sendUsage();
     res(isNaN(num) ? "0" : "1");
 }, "Checks if something is numeric.", [
     ["text", "A text"]
 ], "If is a number 1, unless 0");
 
-registerCommand(["operation", "opr"], async (args, {res, err, sendUsage, variables}) => {
-    const num1 = parseFloat(vr(args[0], variables));
+registerCommand(["operation", "opr"], async (args, {res, err, sendUsage, vr}) => {
+    const num1 = parseFloat(vr(args[0]));
     const opr = args[1];
-    const num2 = parseFloat(vr(args[2], variables));
+    const num2 = parseFloat(vr(args[2]));
     if (isNaN(num1) || !["+", "-", "*", "/", "**", ">>", "<<", "%", "^"].includes(opr) || isNaN(num2)) return sendUsage();
     res(eval("num1 " + opr + " num2"));
 }, "Does mathematical operations on numbers.", [
@@ -365,9 +374,9 @@ const MATH_F = [
     "sign", "sqrt", "log2", "log10", "fround", "exp", "clz32"
 ];
 
-registerCommand("math", async (args, {res, err, sendUsage, variables}) => {
+registerCommand("math", async (args, {res, err, sendUsage, vr}) => {
     const opr = args[0];
-    const num = parseFloat(vr(args[1], variables));
+    const num = parseFloat(vr(args[1]));
     if (isNaN(num) || !MATH_F.includes(opr)) return sendUsage();
     res(eval("Math." + opr + "(num)"));
 }, "Runs mathematical methods on numbers.", [
@@ -375,9 +384,9 @@ registerCommand("math", async (args, {res, err, sendUsage, variables}) => {
     ["number", "The number."],
 ], "number");
 
-registerCommand(["random", "rand"], async (args, {res, err, sendUsage, variables}) => {
-    const num1 = parseInt(vr(args[0], variables));
-    const num2 = parseInt(vr(args[1], variables));
+registerCommand(["random", "rand"], async (args, {res, err, vr, sendUsage}) => {
+    const num1 = parseInt(vr(args[0]));
+    const num2 = parseInt(vr(args[1]));
     if (isNaN(num1) || isNaN(num2)) return sendUsage();
     const min = Math.min(num1, num2);
     const max = Math.max(num1, num2);
@@ -387,9 +396,9 @@ registerCommand(["random", "rand"], async (args, {res, err, sendUsage, variables
     ["number2", "The second number."],
 ], "integer");
 
-registerCommand(["randomf", "randf"], async (args, {res, err, sendUsage, variables}) => {
-    const num1 = parseFloat(vr(args[0], variables));
-    const num2 = parseFloat(vr(args[1], variables));
+registerCommand(["randomf", "randf"], async (args, {res, err, sendUsage, vr}) => {
+    const num1 = parseFloat(vr(args[0]));
+    const num2 = parseFloat(vr(args[1]));
     if (isNaN(num1) || isNaN(num2)) return sendUsage();
     const min = Math.min(num1, num2);
     const max = Math.max(num1, num2);
@@ -399,10 +408,10 @@ registerCommand(["randomf", "randf"], async (args, {res, err, sendUsage, variabl
     ["float2", "The second floating number."],
 ], "float");
 
-registerCommand(["substring", "substr"], async (args, {res, err, sendUsage, variables}) => {
-    const from = parseFloat(vr(args[0], variables));
-    const to = parseFloat(vr(args[1], variables));
-    const str = vr(args.slice(2).join(" "), variables);
+registerCommand(["substring", "substr"], async (args, {res, err, sendUsage, vr}) => {
+    const from = parseFloat(vr(args[0]));
+    const to = parseFloat(vr(args[1]));
+    const str = vr(args.slice(2).join(" "));
     if (isNaN(from) || isNaN(to)) return sendUsage();
     res(str.substring(from, to));
 }, "Extracts a portion of a string, based on the specified starting and ending indices.", [
@@ -411,10 +420,10 @@ registerCommand(["substring", "substr"], async (args, {res, err, sendUsage, vari
     ["text", "The text."]
 ], "string");
 
-registerCommand(["replace", "rpl"], async (args, {res, err, sendUsage, variables}) => {
-    const from = vr(args[0], variables);
-    const to = vr(args[1], variables);
-    const str = vr(args.slice(2).join(" "), variables);
+registerCommand(["replace", "rpl"], async (args, {res, err, sendUsage, vr}) => {
+    const from = vr(args[0]);
+    const to = vr(args[1]);
+    const str = vr(args.slice(2).join(" "));
     if (!from || !to) return sendUsage();
     res(str.replace(from, to));
 }, "Replaces a single occurrence of a specified text with a new text.", [
@@ -423,10 +432,10 @@ registerCommand(["replace", "rpl"], async (args, {res, err, sendUsage, variables
     ["text", "The text."]
 ], "string");
 
-registerCommand(["replaceall", "rplall"], async (args, {res, err, sendUsage, variables}) => {
-    const from = vr(args[0], variables);
-    const to = vr(args[1], variables);
-    const str = vr(args.slice(2).join(" "), variables);
+registerCommand(["replaceall", "rplall"], async (args, {res, err, sendUsage, vr}) => {
+    const from = vr(args[0]);
+    const to = vr(args[1]);
+    const str = vr(args.slice(2).join(" "));
     if (!from || !to) return sendUsage();
     res(str.replaceAll(from, to));
 }, "Replaces all occurrences of a specified text with a new text.", [
@@ -435,21 +444,81 @@ registerCommand(["replaceall", "rplall"], async (args, {res, err, sendUsage, var
     ["text", "The text."]
 ], "string");
 
-registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables, scriptName}) => {
-    const variable = vr(args[0], variables);
+registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables, vr, scriptName, assign}) => {
+    const variable = vr(args[0]);
     const code = args.slice(1).join(" ");
     if (!variable || !code) return sendUsage();
     const r = await tickScript([code], scriptName, variables, true);
     const v = variables[variable];
     if (v && v.type !== "string") return err("Expected variable " + variable + " to be string. Got: " + v.type);
-    if (r) variables[variable] = {
-        type: "string", value: r
-    };
+    if (r) assign(variable, r, "string");
     res(r ? "1" : "0");
 }, "Assigns the variable a result of a code.", [
     ["variable", "The variable's name."],
     ["code", "The code."]
 ], "If succeeds 1, unless 0");
+
+registerCommand(["stop", "exit"], async (args, {res, err, script}) => {
+    if (!script) return err("Exiting is only allowed in scripts.");
+    err("");
+}, "Stops the script.");
+
+registerCommand("click", async (args, {res, err, script, vr, sendUsage}) => {
+    const button = vr(args[0]) || "left";
+    const type = vr(args[1]) || "single";
+    if (!["left", "right"].includes(button) || !["single", "double"].includes(type)) return sendUsage();
+    robot.mouseClick(button, type === "double");
+}, "Clicks the mouse.", [
+    ["button", "The mouse button. Can be: left, right. Default: left"],
+    ["type", "The click type. Can be: double, single. Default: single"],
+]);
+
+registerCommand("move", async (args, {res, err, script, vr, sendUsage}) => {
+    const x = parseFloat(vr(args[0]));
+    const y = parseFloat(vr(args[1]));
+    const speedV = vr(args[2]);
+    const speed = parseFloat(speedV);
+    if (isNaN(x) || isNaN(y) || (speedV && (isNaN(speed) || speed <= 0))) return sendUsage();
+    if (speedV && speed > 10) return err("Move speed cannot be bigger than 10.");
+    if (!speedV) robot.moveMouse(x, y);
+    else robot.moveMouseSmooth(x, y, speed);
+}, "Moves the mouse.", [
+    ["x", "The X coordinate to move to."],
+    ["y", "The Y coordinate to move to."],
+    ["speed?", "The speed of the mouse movement. Optional."],
+]);
+
+registerCommand("drag", async (args, {res, err, script, vr, sendUsage}) => {
+    const x = parseFloat(vr(args[0]));
+    const y = parseFloat(vr(args[1]));
+    if (isNaN(x) || isNaN(y)) return sendUsage();
+    robot.dragMouse(x, y);
+}, "Drags the mouse with mouse button held down.", [
+    ["x", "The X coordinate to drag to."],
+    ["y", "The Y coordinate to drag to."]
+]);
+
+registerCommand("scroll", async (args, {res, err, script, vr, sendUsage}) => {
+    const x = parseFloat(vr(args[0]));
+    const y = parseFloat(vr(args[1]));
+    if (isNaN(x) || isNaN(y)) return sendUsage();
+    robot.scrollMouse(x, y);
+}, "Scrolls the mouse in any direction.", [
+    ["x", "The X coordinate of the scroll."],
+    ["y", "The Y coordinate of the scroll."]
+]);
+
+registerCommand("position", async (args, {res, err, script, vr, assign, sendUsage}) => {
+    const vx = args[0];
+    const vy = args[1];
+    if (!vx || !vy) return sendUsage();
+    const pos = robot.getMousePos();
+    if (!assign(vx, pos.x + "", "string")) return err("Variable names cannot start with numbers.");
+    if (!assign(vy, pos.y + "", "string")) return err("Variable names cannot start with numbers.");
+}, "Gets the position of the mouse.", [
+    ["variableX", "The variable that will be used for the X value of the mouse."],
+    ["variableY", "The variable that will be used for the Y value of the mouse."]
+]);
 
 // DONE $$n(new line)
 // DONE $$s(space)
@@ -476,11 +545,11 @@ registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables,
 
 // DONE ASSIGN          v code: string
 
-// TODO CLICK           right/left/v1 double/single/v2
-// TODO MOVE            x: float y: float speed?: float
-// TODO DRAG            x: float y: float
-// TODO SCROLL          x: float y: float
-// TODO POSITION        v1 v2
+// DONE CLICK           right/left/v1 double/single/v2
+// DONE MOVE            x: float y: float speed?: float
+// DONE DRAG            x: float y: float
+// DONE SCROLL          x: float y: float
+// DONE POSITION        v1 v2
 // TODO PIXEL           x: float y: float v
 // TODO SCREENSIZE      v1 v2
 // TODO MOUSEDELAY      seconds: float
@@ -521,7 +590,9 @@ registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables,
 // TODO DATA LIST       vAssign
 
 // TODO TIME
-// TODO STOP
+// TODO TIMEMS
+// TODO TIMENANO
+// DONE STOP
 
 // TODO FILEWRITE       file: string content: string
 // TODO FILEREAD        file: string content: string
@@ -533,7 +604,7 @@ registerCommand(["assign", "asg"], async (args, {res, err, sendUsage, variables,
 
 // TODO FOREACH         v vInd vVal code: string
 // TODO REPEAT          v from: number to: number code: string
-
+// TODO ARGUMENTS
 
 let terminalVariables = {};
 
@@ -542,22 +613,21 @@ const _msg = () => {
     terminalMessages = [];
     return m;
 };
-const _prompt_ = async (str: string) => await tickScript([str], "", terminalVariables);
+const _prompt_ = async (str: string) => {
+    Terminal.disableInput();
+    await tickScript([str], "", terminalVariables);
+};
 const _stop_ = (n: string) => {
-    if (n) {
-        if (terminalMessages[terminalMessages.length - 1].event !== "end" || scripts.size === 1) Terminal.end();
-        scripts.delete(n);
-        Terminal.scripts();
-    } else {
-        if (terminalMessages[terminalMessages.length - 1].event !== "end" || scripts.size !== 0) Terminal.end();
-        scripts.clear();
-        Terminal.scripts();
-    }
+    if (!inputOn) Terminal.enableInput();
+    if (n) scripts.delete(n);
+    else scripts.clear();
+    Terminal.scripts();
 };
 
 module.exports = {
     scripts_: scripts,
     msg: _msg,
     prompt_: _prompt_,
-    stop_: _stop_
+    stop_: _stop_,
+    updateMaximize: (d: boolean) => terminalMessages.push({event: "maximize", value: d})
 };
